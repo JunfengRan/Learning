@@ -1,0 +1,11 @@
+{
+  "name": "learning",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate:mermaid": "node scripts/validate-mermaid.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.6.0"
+  }
+}

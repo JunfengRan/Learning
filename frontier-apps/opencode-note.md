@@ -101,17 +101,17 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant API as SessionPrompt
-  participant Loop as loop
+  participant MainLoop as "main loop"
   participant Proc as SessionProcessor
-  participant LLM as AI SDK streamText
+  participant LLM as "AI SDK streamText"
 
-  API->>Loop: createUserMessage + loop()
-  loop while 未完成
-    Loop->>Loop: SessionTools.resolve + 拼 system
-    Loop->>Proc: process(messages, tools)
+  API->>MainLoop: createUserMessage + loop()
+  loop while pending
+    MainLoop->>MainLoop: SessionTools.resolve + system prompt
+    MainLoop->>Proc: process(messages, tools)
     Proc->>LLM: streamText
     LLM-->>Proc: tool_calls / text
-    Proc-->>Loop: continue / compact / stop
+    Proc-->>MainLoop: continue / compact / stop
   end
 ```
 

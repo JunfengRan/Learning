@@ -203,7 +203,7 @@ sequenceDiagram
 ```mermaid
 flowchart TB
     AC[agent-core loop] -->|StreamFn| RT[src/agents/runtime]
-    RT --> AI[@openclaw/ai ApiProvider]
+    RT --> AI["@openclaw/ai ApiProvider"]
     AI --> HTTP[Provider HTTP/SDK]
 ```
 
