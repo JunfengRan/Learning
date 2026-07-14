@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Building effective human-agent teams — 学习笔记</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #1a1a1a;
+      --muted: #555;
+      --border: #ddd;
+      --accent: #c45c26;
+      --accent2: #2563eb;
+      --code-bg: #f4f4f5;
+      --card: #fff;
+      --highlight: #fff7ed;
+      --ok: #16a34a;
+      --warn: #d97706;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1117;
+        --fg: #e8e8e8;
+        --muted: #9ca3af;
+        --border: #2d333b;
+        --accent: #fb923c;
+        --accent2: #60a5fa;
+        --code-bg: #1c2128;
+        --card: #161b22;
+        --highlight: #1c1917;
+        --ok: #4ade80;
+        --warn: #fbbf24;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+      border-right: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    nav strong { font-size: 0.9rem; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.2rem 0;
+    }
+    nav a:hover { color: var(--accent); }
+    nav hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    main { padding: 2rem 2rem 4rem; max-width: 780px; }
+    h1 { font-size: 1.65rem; margin-top: 0; line-height: 1.3; }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    h3 { font-size: 1.02rem; margin-top: 1.35rem; }
+    .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.75rem; }
+    .meta dt { font-weight: 600; display: inline; }
+    .meta dd { display: inline; margin: 0 0.75rem 0 0.2rem; }
+    .meta a { color: var(--accent2); }
+    .lead {
+      background: var(--highlight);
+      border-left: 3px solid var(--accent);
+      padding: 0.85rem 1rem;
+      margin: 1.25rem 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.95rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    tr:nth-child(even) td { background: color-mix(in srgb, var(--code-bg) 40%, transparent); }
+    code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.84rem;
+      background: var(--code-bg);
+      padding: 0.12rem 0.32rem;
+      border-radius: 3px;
+    }
+    .tag {
+      display: inline-block;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      margin-right: 0.35rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+    }
+    .lesson {
+      border-left: 3px solid var(--accent);
+      padding-left: 0.85rem;
+      margin: 1.25rem 0;
+    }
+    details { margin: 1rem 0; }
+    summary { cursor: pointer; font-weight: 600; }
+    .svg-wrap { overflow-x: auto; margin: 1.25rem 0; }
+    svg text { font-family: system-ui, sans-serif; }
+    ul, ol { padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    footer { color: var(--muted); font-size: 0.78rem; margin-top: 2.5rem; }
+    .checklist li { list-style: none; margin-left: -1.25rem; }
+    .checklist li::before { content: "☐ "; color: var(--accent); }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      nav {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav aria-label="目录">
+      <strong>Human-Agent Teams</strong>
+      <hr />
+      <a href="#s0">概览</a>
+      <a href="#s1">§1 Multiplayer 定义</a>
+      <a href="#s2">§2 四条教训</a>
+      <a href="#s3">§3 对照表</a>
+      <a href="#s4">§4 工程落点</a>
+      <a href="#s5">§5 自检与行动</a>
+      <a href="#appendix">附录</a>
+      <hr />
+      <a href="./2026-06-24-building-effective-human-agent-teams.md">Markdown 版</a>
+      <a href="https://claude.com/blog/building-effective-human-agent-teams">原文</a>
+    </nav>
+    <main>
+      <h1>Building effective human-agent teams</h1>
+      <dl class="meta">
+        <dt>来源</dt><dd><a href="https://claude.com/blog/building-effective-human-agent-teams">Anthropic Claude Blog</a></dd>
+        <dt>作者</dt><dd>Kristen Swanson（Education）</dd>
+        <dt>发布</dt><dd>2026-06-24</dd>
+        <dt>阅读</dt><dd>2026-07-14</dd>
+        <dt>产品</dt><dd>Claude Tag</dd>
+      </dl>
+
+      <p class="lead"><strong>一句话：</strong>AI 协作从「单人单窗」变为「多人同 workspace」——人类定战略与北极星，Agent 在共享上下文与明确角色下执行；成功靠公开文档、分工、质量门槛与渐进信任这些经典团队习惯，而非新魔法。</p>
+
+      <section id="s0">
+        <h2>概览</h2>
+        <p>
+          <span class="tag">Claude Tag</span>
+          <span class="tag">Multiplayer Agents</span>
+          <span class="tag">Enterprise AI</span>
+        </p>
+        <p>博文描述 Anthropic 数月内部试点后的组织实践：工具（如 Claude Tag）让人类与 Agent 在同一 Slack workspace 协作，但 <strong>技术能力只是底座</strong>——团队还需共享规范。四条教训分别对应 <strong>信息流、分工、目标对齐、信任曲线</strong>。</p>
+        <div class="svg-wrap">
+          <svg viewBox="0 0 760 280" width="100%" role="img" aria-label="人机协作四层栈">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+              </marker>
+            </defs>
+            <rect x="40" y="20" width="680" height="44" rx="6" fill="#dbeafe" stroke="#2563eb"/>
+            <text x="380" y="47" text-anchor="middle" font-size="13" font-weight="600">L4 信任：Doer-Verifier · 渐进自主 · 注意力经济学</text>
+            <rect x="40" y="74" width="680" height="44" rx="6" fill="#ffedd5" stroke="#c45c26"/>
+            <text x="380" y="101" text-anchor="middle" font-size="13" font-weight="600">L3 北极星：人类定长期目标 · 指定可 proactive 的 Agent</text>
+            <rect x="40" y="128" width="680" height="44" rx="6" fill="#fef3c7" stroke="#d97706"/>
+            <text x="380" y="155" text-anchor="middle" font-size="13" font-weight="600">L2 角色：一张花名册 · Skill 文件 · 岗位工具</text>
+            <rect x="40" y="182" width="680" height="44" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+            <text x="380" y="209" text-anchor="middle" font-size="13" font-weight="600">L1 公开上下文：workspace 级安全边界 · 默认可检索</text>
+            <rect x="40" y="236" width="680" height="36" rx="6" fill="#f4f4f5" stroke="#888"/>
+            <text x="380" y="258" text-anchor="middle" font-size="12" fill="#555">底座：持久记忆 · Agent 独立凭证 · 广泛信息访问（Claude Tag）</text>
+            <line x1="380" y1="64" x2="380" y2="74" stroke="#888" marker-end="url(#arr)"/>
+            <line x1="380" y1="118" x2="380" y2="128" stroke="#888" marker-end="url(#arr)"/>
+            <line x1="380" y1="172" x2="380" y2="182" stroke="#888" marker-end="url(#arr)"/>
+            <line x1="380" y1="226" x2="380" y2="236" stroke="#888" marker-end="url(#arr)"/>
+          </svg>
+        </div>
+      </section>
+
+      <section id="s1">
+        <h2>§1 Multiplayer agents 是什么</h2>
+        <table>
+          <thead>
+            <tr><th>维度</th><th>单人 Agent</th><th>Multiplayer Agent</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>交互</td><td>一人 ↔ 一个 chat</td><td>多人 ↔ 同一 workspace</td></tr>
+            <tr><td>记忆</td><td>会话级</td><td><strong>持久</strong>，跨人跨线程</td></tr>
+            <tr><td>身份</td><td>常绑个人凭证</td><td><strong>独立凭证</strong></td></tr>
+            <tr><td>信息</td><td>当场粘贴</td><td>持续访问可检索组织文本</td></tr>
+          </tbody>
+        </table>
+        <p>技术底座三要素：<code>持久记忆</code>、<code>非人类绑定凭证</code>、<code>广泛可读信息</code>。缺任何一层，频道里的 Agent 都无法「像队友」而非「临时外包」。</p>
+      </section>
+
+      <section id="s2">
+        <h2>§2 四条教训</h2>
+
+        <div class="lesson">
+          <h3>教训 1：公开工作，给 Agent 广泛上下文</h3>
+          <p>Agent 只消费 <strong>写下来且可检索</strong> 的内容。私信与走廊对话不存在。</p>
+          <ul>
+            <li>用 <strong>少量 workspace 级安全边界</strong>，而非 per-doc 共享决策</li>
+            <li>边界内默认公开；决策落在频道、文档、会议纪要</li>
+            <li><strong>为 Agent 可发现性而写</strong> 文档</li>
+            <li>敏感一对一：Claude Tag DM / claude.ai / Cowork + 个人 MCP</li>
+          </ul>
+        </div>
+
+        <div class="lesson">
+          <h3>教训 2：一张花名册，角色与工具对齐</h3>
+          <p>人机共享 roster、artifact、工作区。不同 Agent 不同岗位（分析 / 设计标准 / 研究综合）。</p>
+          <ul>
+            <li>启动项目时与 Agent <strong>协商分工</strong>；可再拉起子 Agent</li>
+            <li>工具岗位化：BigQuery、Playwright MCP 等</li>
+            <li><strong>Skill 文件</strong> 固化角色，便于全公司复用</li>
+            <li>无角色 → 侧边栏个人 AI 舰队，指标重复、上下文撕裂</li>
+          </ul>
+        </div>
+
+        <div class="lesson">
+          <h3>教训 3：北极星，选择性主动</h3>
+          <p>人类写下宏大长期目标；<strong>点名</strong> 哪些 Agent 可主动建议新工作流。</p>
+          <div class="card">
+            <strong>案例</strong>：北极星「让 onboarding 更有帮助」→ Agent 主动改错误文案 → 次周 onboarding 成功率上升。
+          </div>
+          <p>并非全员 proactive；需技能 + 信任门槛，否则变噪音。</p>
+        </div>
+
+        <div class="lesson">
+          <h3>教训 4：渐进信任 + Doer-Verifier</h3>
+          <ul>
+            <li>按任务类型扩权；模型升级后重测 prompt / 护栏</li>
+            <li><strong>Doer-Verifier</strong>：执行 Agent + 验收 Agent（测试 / rubric）</li>
+            <li>每周 <code>lessons &amp; missteps</code> 报告</li>
+            <li>教练 Agent：批量提问、重复上下文、限制每人可见量——<strong>人类注意力是稀缺资源</strong></li>
+          </ul>
+          <div class="card">
+            <strong>Backlog 案例</strong>：一组 Agent 标归属与复杂度，另一组对中低复杂度项出 patch；人类从全审过渡到只审硬权衡项；最终可独立处理大量 bug fix（博文称 500 例量级）。
+          </div>
+        </div>
+      </section>
+
+      <section id="s3">
+        <h2>§3 与仓库内笔记对照</h2>
+        <table>
+          <thead>
+            <tr><th>主题</th><th>本文</th><th>关联笔记</th><th>关系</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>产品底座</td><td>Slack 多人 workspace</td><td><a href="./2026-06-23-claude-tag.md">Claude Tag</a></td><td>产品 + 实践</td></tr>
+            <tr><td>代码库可读</td><td>文档为 Agent 而写</td><td><a href="./2026-02-11-harness-engineering.md">Harness Engineering</a></td><td>互补</td></tr>
+            <tr><td>角色 / Skills</td><td>Skill 文件定义 Agent</td><td><a href="./2026-06-18-steering-claude-code-skills-hooks-rules-subagents.md">Steering Claude Code</a></td><td>一致</td></tr>
+            <tr><td>长时程 / 审计</td><td>信任来自可验证产出</td><td><a href="./2026-04-08-managed-agents.md">Managed Agents</a></td><td>精神一致</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="s4">
+        <h2>§4 工程落点</h2>
+        <h3>可观察行为</h3>
+        <ul>
+          <li>频道内共享 thread 与 artifact</li>
+          <li>Agent 独立凭证访问岗位工具</li>
+          <li>Agent 可委派子 Agent（Claude Code agent teams / Tag）</li>
+          <li>DM 保留私人协作</li>
+        </ul>
+        <h3>自建平台启发</h3>
+        <ol>
+          <li>先信息架构，后 Agent</li>
+          <li>角色 = 工具 bundle + memory 范围 + Skill</li>
+          <li>Proactive 需北极星 + 信任分级 + 注意力预算</li>
+          <li>每种 artifact 有自动验收路径</li>
+          <li>扩权粒度到任务类型</li>
+        </ol>
+      </section>
+
+      <section id="s5">
+        <h2>§5 自检五问与行动清单</h2>
+        <ol>
+          <li>信息是否公开且可检索？</li>
+          <li>能否列出花名册与职责？</li>
+          <li>工具是否岗位对齐？</li>
+          <li>是否有 rubric / 测试？</li>
+          <li>是否有清晰北极星？</li>
+        </ol>
+        <h3>可行动清单</h3>
+        <ul class="checklist">
+          <li>划 2–3 个 security boundary，边界内默认公开</li>
+          <li>建人机花名册（人审 judgment，Agent 做可验证执行）</li>
+          <li>为每类 Agent 写 Skill 文件</li>
+          <li>写北极星并限制 proactive Agent 数量</li>
+          <li>上线 Doer-Verifier + 文档 rubric</li>
+          <li>设批处理提问与每日待审上限</li>
+        </ul>
+      </section>
+
+      <section id="appendix">
+        <h2>附录</h2>
+        <details>
+          <summary>仍待验证</summary>
+          <ul>
+            <li>子 Agent 委派在 Tag vs agent teams 的权限继承</li>
+            <li>Security boundary 管理台配置项</li>
+            <li>Proactive 按 Agent 粒度开关</li>
+            <li>lessons 报告模板 / routine 自动化</li>
+          </ul>
+        </details>
+        <details>
+          <summary>关联阅读</summary>
+          <ul>
+            <li><a href="./2026-06-23-claude-tag.md">Claude Tag 笔记</a></li>
+            <li><a href="./2026-04-08-managed-agents.md">Managed Agents</a></li>
+            <li><a href="./2026-06-18-steering-claude-code-skills-hooks-rules-subagents.md">Steering Claude Code</a></li>
+            <li><a href="./2026-02-11-harness-engineering.md">Harness Engineering</a></li>
+          </ul>
+        </details>
+      </section>
+
+      <footer>摘录完成：2026-07-14 · Learning / company-blogs</footer>
+    </main>
+  </div>
+</body>
+</html>

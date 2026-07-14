@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude Code HTML 输出的「非理性有效」— 学习笔记</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #1a1a1a;
+      --muted: #555;
+      --border: #ddd;
+      --accent: #6b4fbb;
+      --accent2: #2563eb;
+      --code-bg: #f4f4f5;
+      --card: #fff;
+      --highlight: #f3f0ff;
+      --ok: #16a34a;
+      --warn: #d97706;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1117;
+        --fg: #e8e8e8;
+        --muted: #9ca3af;
+        --border: #2d333b;
+        --accent: #a78bfa;
+        --accent2: #60a5fa;
+        --code-bg: #1c2128;
+        --card: #161b22;
+        --highlight: #1e1a2e;
+        --ok: #4ade80;
+        --warn: #fbbf24;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+      border-right: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    nav strong { font-size: 0.9rem; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.2rem 0;
+    }
+    nav a:hover { color: var(--accent); }
+    nav hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    main { padding: 2rem 2rem 4rem; max-width: 780px; }
+    h1 { font-size: 1.65rem; margin-top: 0; line-height: 1.3; }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    h3 { font-size: 1.02rem; margin-top: 1.35rem; }
+    .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.75rem; }
+    .meta dt { font-weight: 600; display: inline; }
+    .meta dd { display: inline; margin: 0 0.75rem 0 0.2rem; }
+    .meta a { color: var(--accent2); }
+    .lead {
+      background: var(--highlight);
+      border-left: 3px solid var(--accent);
+      padding: 0.85rem 1rem;
+      margin: 1.25rem 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.95rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    tr:nth-child(even) td { background: color-mix(in srgb, var(--code-bg) 40%, transparent); }
+    code, pre {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.84rem;
+    }
+    code { background: var(--code-bg); padding: 0.12rem 0.32rem; border-radius: 3px; }
+    pre {
+      background: var(--code-bg);
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .tag {
+      display: inline-block;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      margin-right: 0.35rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+    }
+    details { margin: 1rem 0; }
+    summary { cursor: pointer; font-weight: 600; }
+    .svg-wrap { overflow-x: auto; margin: 1.25rem 0; }
+    svg text { font-family: system-ui, sans-serif; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    footer { color: var(--muted); font-size: 0.78rem; margin-top: 2.5rem; }
+
+    /* tabs */
+    .tabs { margin: 1.25rem 0; }
+    .tab-labels { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }
+    .tab-labels label {
+      cursor: pointer;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      background: var(--code-bg);
+    }
+    .tabs input { display: none; }
+    .tab-panel { display: none; }
+    .tabs input:nth-of-type(1):checked ~ .tab-panels .panel-1,
+    .tabs input:nth-of-type(2):checked ~ .tab-panels .panel-2,
+    .tabs input:nth-of-type(3):checked ~ .tab-panels .panel-3,
+    .tabs input:nth-of-type(4):checked ~ .tab-panels .panel-4,
+    .tabs input:nth-of-type(5):checked ~ .tab-panels .panel-5,
+    .tabs input:nth-of-type(6):checked ~ .tab-panels .panel-6 {
+      display: block;
+    }
+    .tabs input:nth-of-type(1):checked ~ .tab-labels label:nth-of-type(1),
+    .tabs input:nth-of-type(2):checked ~ .tab-labels label:nth-of-type(2),
+    .tabs input:nth-of-type(3):checked ~ .tab-labels label:nth-of-type(3),
+    .tabs input:nth-of-type(4):checked ~ .tab-labels label:nth-of-type(4),
+    .tabs input:nth-of-type(5):checked ~ .tab-labels label:nth-of-type(5),
+    .tabs input:nth-of-type(6):checked ~ .tab-labels label:nth-of-type(6) {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .severity-high { border-left: 3px solid #dc2626; padding-left: 0.75rem; }
+    .severity-med { border-left: 3px solid var(--warn); padding-left: 0.75rem; }
+    .severity-low { border-left: 3px solid var(--ok); padding-left: 0.75rem; }
+
+    .demo-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin: 0.75rem 0; }
+    .demo-row input[type="range"] { flex: 1; min-width: 120px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    button:hover { opacity: 0.9; }
+    .demo-btn {
+      display: inline-block;
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      background: #6366f1;
+      color: #fff;
+      transition: background 0.15s, transform 0.15s;
+      user-select: none;
+    }
+    .demo-btn.pulse { animation: pulse 0.4s ease; }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(0.95); background: #8b5cf6; }
+      100% { transform: scale(1); background: #7c3aed; }
+    }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      nav {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav aria-label="目录">
+      <strong>HTML 非理性有效</strong>
+      <hr />
+      <a href="#s0">概览</a>
+      <a href="#s1">§1 为何 HTML</a>
+      <a href="#s2">§2 MD vs HTML</a>
+      <a href="#s3">§3 六大用例</a>
+      <a href="#s4">§4 工作流</a>
+      <a href="#s5">§5 交互演示</a>
+      <a href="#s6">§6 FAQ 与对照</a>
+      <a href="#appendix">附录</a>
+      <hr />
+      <a href="./2026-05-20-claude-code-html-effectiveness.md">Markdown 版</a>
+    </nav>
+    <main>
+      <h1>Claude Code 用 HTML 输出的「非理性有效」</h1>
+      <dl class="meta">
+        <dt>来源</dt><dd><a href="https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html">Anthropic Claude Blog</a></dd>
+        <dt>作者</dt><dd>Thariq Shihipar（MTS，个人实践）</dd>
+        <dt>发布</dt><dd>2026-05-20</dd>
+        <dt>阅读</dt><dd>2026-07-14</dd>
+        <dt>读者</dt><dd>Agent / 工具链工程师</dd>
+      </dl>
+
+      <p class="lead"><strong>一句话：</strong>Agent 越强，人类越可能不读计划就 hand off；HTML 用导航、SVG、交互把 spec 变成「愿意打开并参与」的交付物——Claude Code 团队几乎全面转向 HTML 作为人类可读输出。</p>
+
+      <section id="s0">
+        <h2>概览</h2>
+        <p><span class="tag">Claude Code</span><span class="tag">输出格式</span><span class="tag">Human-in-the-loop</span></p>
+        <p>Markdown 仍是 Agent 生态默认格式，但作者认为当任务变复杂时，Markdown 的<strong>信息带宽与可读性</strong>成为瓶颈：100 行以上难读完、ASCII 图替代真实可视化、分享 friction 高。HTML 单文件可离线打开，承载表格/CSS/SVG/JS，且与 Claude Code 的<strong>多源 context 摄入</strong>（FS、MCP、Chrome、git）结合，适合 spec、PR review、原型与 throwaway 编辑器。</p>
+      </section>
+
+      <section id="s1">
+        <h2>§1 为何 HTML 比 Markdown 更合适</h2>
+        <table>
+          <thead><tr><th>维度</th><th>HTML 能力</th><th>Markdown 常见退化</th></tr></thead>
+          <tbody>
+            <tr><td><strong>信息密度</strong></td><td>表格、CSS、SVG、canvas、嵌入代码</td><td>ASCII 流程图、Unicode「估色」</td></tr>
+            <tr><td><strong>可读性</strong></td><td>标签页、锚点导航、响应式布局</td><td>长 wall of text，~100 行阅读上限</td></tr>
+            <tr><td><strong>分享</strong></td><td>上传/发链接，浏览器即读</td><td>附件或依赖 GitHub 渲染</td></tr>
+            <tr><td><strong>交互</strong></td><td>slider、拖拽、live preview + export</td><td>纯静态文本</td></tr>
+            <tr><td><strong>Context</strong></td><td>Claude Code 扫仓库生成带图报告</td><td>同，但呈现层更弱</td></tr>
+          </tbody>
+        </table>
+        <div class="card">
+          <strong>作者的核心动机（Stay in the loop）</strong>
+          <p>格式是<strong>注意力工程</strong>：不是 vanity，而是对抗「Agent 做得越多，人读得越少」的 automation complacency。</p>
+        </div>
+      </section>
+
+      <section id="s2">
+        <h2>§2 Markdown vs HTML：Learning 仓库视角</h2>
+        <div class="svg-wrap">
+          <svg viewBox="0 0 720 220" width="100%" role="img" aria-label="格式分工">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+              </marker>
+            </defs>
+            <rect x="40" y="30" width="280" height="160" rx="8" fill="#e8f4fc" stroke="#2563eb" stroke-width="2"/>
+            <text x="180" y="55" text-anchor="middle" font-weight="600" font-size="13">Markdown</text>
+            <text x="180" y="78" text-anchor="middle" font-size="11" fill="#666">论文 / 博客索引</text>
+            <text x="180" y="98" text-anchor="middle" font-size="11" fill="#666">Agent grep · git diff</text>
+            <text x="180" y="118" text-anchor="middle" font-size="11" fill="#666">GitHub 原生渲染</text>
+            <text x="180" y="148" text-anchor="middle" font-size="10" fill="#2563eb">interpret-tech-notes 默认</text>
+
+            <rect x="400" y="30" width="280" height="160" rx="8" fill="#f3f0ff" stroke="#6b4fbb" stroke-width="2"/>
+            <text x="540" y="55" text-anchor="middle" font-weight="600" font-size="13">HTML</text>
+            <text x="540" y="78" text-anchor="middle" font-size="11" fill="#666">长 explainer · 多图架构</text>
+            <text x="540" y="98" text-anchor="middle" font-size="11" fill="#666">浏览器精读 · 离线分享</text>
+            <text x="540" y="118" text-anchor="middle" font-size="11" fill="#666">交互调参 · export 回 Agent</text>
+            <text x="540" y="148" text-anchor="middle" font-size="10" fill="#6b4fbb">Claude Code 交付物（本文）</text>
+
+            <text x="360" y="210" text-anchor="middle" font-size="11" fill="#888">推荐双文件：.md 进 README 索引 → .html 人类深挖</text>
+            <line x1="320" y1="110" x2="400" y2="110" stroke="#888" marker-end="url(#arr)"/>
+          </svg>
+        </div>
+        <p>本文<strong>不主张</strong> Learning 仓库全量替换 Markdown；而是把 HTML 作为<strong>Agent→人</strong>的富媒体通道，Markdown 保留为<strong>Agent↔Agent / 索引</strong>通道（见 <code>format-guide.md</code>）。</p>
+      </section>
+
+      <section id="s3">
+        <h2>§3 六大用例（标签页）</h2>
+        <div class="tabs">
+          <input type="radio" name="uc" id="uc1" checked />
+          <input type="radio" name="uc" id="uc2" />
+          <input type="radio" name="uc" id="uc3" />
+          <input type="radio" name="uc" id="uc4" />
+          <input type="radio" name="uc" id="uc5" />
+          <input type="radio" name="uc" id="uc6" />
+          <div class="tab-labels">
+            <label for="uc1">规划</label>
+            <label for="uc2">Code Review</label>
+            <label for="uc3">设计原型</label>
+            <label for="uc4">报告学习</label>
+            <label for="uc5">自定义 UI</label>
+            <label for="uc6">验证</label>
+          </div>
+          <div class="tab-panels">
+            <div class="tab-panel panel-1 card">
+              <h3>Specs / 规划 / 探索</h3>
+              <p>多 HTML 文件组成「web of specs」：brainstorm → mockup → 实现计划 → 新 session 带全部文件实现。</p>
+              <pre><code>Generate 6 distinctly different onboarding approaches—vary layout,
+tone, and density—in a single HTML grid. Label each with its tradeoff.</code></pre>
+            </div>
+            <div class="tab-panel panel-2 card">
+              <h3>Code review / 理解</h3>
+              <p>内联 diff 批注、严重性配色、模块流图——比 Markdown 更适合 PR 说明。</p>
+              <div class="severity-high"><strong>High</strong>：backpressure 未处理 slow consumer</div>
+              <div class="severity-med"><strong>Med</strong>：buffer 上限未文档化</div>
+              <div class="severity-low"><strong>Low</strong>：命名可更清晰</div>
+            </div>
+            <div class="tab-panel panel-3 card">
+              <h3>Design / 原型</h3>
+              <p>Claude Design 基于 HTML；可 slider 调动画参数后 copy 到 React/Swift。</p>
+              <pre><code>Prototype checkout button: play animation → turn purple.
+HTML + sliders + copy parameters button.</code></pre>
+            </div>
+            <div class="tab-panel panel-4 card">
+              <h3>Reports / 研究 / 学习</h3>
+              <p>跨 Slack、代码库、git、网页综合；SVG explainer 单页。</p>
+              <pre><code>Rate limiter HTML explainer: token-bucket diagram,
+3–4 annotated snippets, gotchas section.</code></pre>
+            </div>
+            <div class="tab-panel panel-5 card">
+              <h3>Custom editing UI</h3>
+              <p>Throwaway 编辑器：拖拽 triage、feature flag 表单、prompt side-by-side。结尾必有 <strong>export</strong>。</p>
+              <ul>
+                <li>copy as Markdown / JSON / prompt / diff</li>
+                <li>单次任务专用，非产品化</li>
+              </ul>
+            </div>
+            <div class="tab-panel panel-6 card">
+              <h3>验证 Agent</h3>
+              <p>验证阶段让 verification agent 读取全部 HTML spec，对照实现——比单份 Markdown plan 上下文更完整。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s4">
+        <h2>§4 规划工作流</h2>
+        <div class="svg-wrap">
+          <svg viewBox="0 0 720 120" width="100%" role="img" aria-label="HTML 规划流">
+            <defs>
+              <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+              </marker>
+            </defs>
+            <rect x="20" y="40" width="100" height="44" rx="6" fill="#f3f0ff" stroke="#6b4fbb"/>
+            <text x="70" y="67" text-anchor="middle" font-size="10">探索 HTML</text>
+            <rect x="140" y="40" width="100" height="44" rx="6" fill="#f3f0ff" stroke="#6b4fbb"/>
+            <text x="190" y="67" text-anchor="middle" font-size="10">Mockup</text>
+            <rect x="260" y="40" width="100" height="44" rx="6" fill="#f3f0ff" stroke="#6b4fbb"/>
+            <text x="310" y="67" text-anchor="middle" font-size="10">实现计划</text>
+            <rect x="380" y="40" width="100" height="44" rx="6" fill="#e8f4fc" stroke="#2563eb"/>
+            <text x="430" y="67" text-anchor="middle" font-size="10">新 session</text>
+            <rect x="500" y="40" width="100" height="44" rx="6" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="550" y="67" text-anchor="middle" font-size="10">实现</text>
+            <rect x="620" y="40" width="80" height="44" rx="6" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="660" y="67" text-anchor="middle" font-size="10">验证</text>
+            <line x1="120" y1="62" x2="140" y2="62" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="240" y1="62" x2="260" y2="62" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="360" y1="62" x2="380" y2="62" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="480" y1="62" x2="500" y2="62" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="600" y1="62" x2="620" y2="62" stroke="#888" marker-end="url(#arr2)"/>
+          </svg>
+        </div>
+        <p><strong>入门</strong>：直接 prompt「make an HTML file / HTML artifact」；recurring 模式再封装为 Skill。原文提到 HTML templates 与 GitHub gallery，抓取时未获得稳定官方 URL——社区可参考 <a href="https://simsov.github.io/claude.html/">simsov/claude.html</a>（含 PR review、explainer、triage 示例）。</p>
+      </section>
+
+      <section id="s5">
+        <h2>§5 交互演示：Export 回 Agent</h2>
+        <p>下文复现博客「Design / 原型」模式：调参 → 生成可粘贴的 prompt 片段。</p>
+        <div class="card">
+          <div class="demo-row">
+            <span>动画时长 (ms)</span>
+            <input type="range" id="dur" min="100" max="800" value="400" />
+            <code id="durVal">400</code>
+          </div>
+          <div class="demo-row">
+            <span>目标色</span>
+            <input type="color" id="color" value="#7c3aed" />
+          </div>
+          <p><span class="demo-btn" id="demoBtn">Checkout</span></p>
+          <button type="button" id="copyPrompt">Copy as prompt</button>
+          <pre id="promptOut" style="margin-top:0.75rem;font-size:0.8rem;"></pre>
+        </div>
+      </section>
+
+      <section id="s6">
+        <h2>§6 FAQ 与仓库对照</h2>
+        <table>
+          <thead><tr><th>问题</th><th>作者回答</th></tr></thead>
+          <tbody>
+            <tr><td>更费 token？</td><td>是，但阅读率与表达力抵消；Opus 4.7 1M context 下不明显</td></tr>
+            <tr><td>还用 Markdown？</td><td>作者几乎全面 HTML；Learning 仓库仍 MD 索引 + HTML 精读</td></tr>
+            <tr><td>单一 plan？</td><td>否——多 HTML 文件对应阶段，长期保留作 reference</td></tr>
+          </tbody>
+        </table>
+        <h3>关联笔记</h3>
+        <ul>
+          <li><a href="./2026-02-11-harness-engineering.md">Harness Engineering</a> — spec 即系统记录</li>
+          <li><a href="./2026-06-23-claude-tag.md">Claude Tag</a> — 协作面与 MCP context</li>
+          <li><code>interpret-tech-notes/references/format-guide.md</code> — MD vs HTML 决策树</li>
+        </ul>
+      </section>
+
+      <section id="appendix">
+        <h2>附录</h2>
+        <details>
+          <summary>示例 Prompt 速查（英文原文压缩）</summary>
+          <pre><code># 规划
+I'm not sure what direction to take the onboarding screen. Generate 6
+distinctly different approaches in a single HTML grid...
+
+# PR Review
+Help me review this PR by creating an HTML artifact...
+Render the actual diff with inline margin annotations, color-code by severity.
+
+# Explainer
+Read the rate limiter code and produce a single HTML explainer:
+token-bucket diagram, 3–4 key snippets, gotchas section.
+
+# Triage board
+Make HTML with draggable Linear tickets across Now/Next/Later/Cut.
+Add "copy as Markdown" for final ordering.
+
+# Prompt tuning
+Side-by-side editor: prompt left, three sample inputs right, live render,
+character counter, copy button.</code></pre>
+        </details>
+        <details>
+          <summary>可行动清单</summary>
+          <ol>
+            <li>复杂 PR / 架构：要求单文件 HTML explainer（SVG + 折叠 gotchas）</li>
+            <li>多方案选型：HTML grid 并排 4–6 种，标注 tradeoff</li>
+            <li>调参任务：HTML slider + copy as prompt</li>
+            <li>Recurring 输出写入 Skill</li>
+            <li>应用技术深挖 ≥150 行：MD 摘要 + HTML 全文（本笔记即范例）</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer>
+        生成时间：2026-07-14 · Learning 仓库 ·
+        <a href="https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html">原文</a>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var dur = document.getElementById('dur');
+      var durVal = document.getElementById('durVal');
+      var color = document.getElementById('color');
+      var btn = document.getElementById('demoBtn');
+      var out = document.getElementById('promptOut');
+      var copyBtn = document.getElementById('copyPrompt');
+
+      function syncPrompt() {
+        out.textContent =
+          'Implement checkout button: on click, play animation over ' +
+          dur.value + 'ms then transition to ' + color.value + '.';
+      }
+      dur.addEventListener('input', function () {
+        durVal.textContent = dur.value;
+        syncPrompt();
+      });
+      color.addEventListener('input', syncPrompt);
+      btn.addEventListener('click', function () {
+        btn.classList.remove('pulse');
+        void btn.offsetWidth;
+        btn.classList.add('pulse');
+        btn.style.background = color.value;
+      });
+      copyBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText(out.textContent).then(function () {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function () { copyBtn.textContent = 'Copy as prompt'; }, 1500);
+        });
+      });
+      syncPrompt();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Managed Agents：大脑与双手解耦 — 学习笔记</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #1a1a1a;
+      --muted: #555;
+      --border: #ddd;
+      --accent: #c45a11;
+      --code-bg: #f4f4f5;
+      --card: #fff;
+      --highlight: #fef3e2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1117;
+        --fg: #e8e8e8;
+        --muted: #9ca3af;
+        --border: #2d333b;
+        --accent: #f0a060;
+        --code-bg: #1c2128;
+        --card: #161b22;
+        --highlight: #2a2010;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+      border-right: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    nav strong { font-size: 0.9rem; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.2rem 0;
+    }
+    nav a:hover { color: var(--accent); }
+    nav hr { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    main { padding: 2rem 2rem 4rem; max-width: 780px; }
+    h1 { font-size: 1.65rem; margin-top: 0; line-height: 1.3; }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    h3 { font-size: 1.02rem; margin-top: 1.35rem; }
+    .meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.75rem; }
+    .meta dt { font-weight: 600; display: inline; }
+    .meta dd { display: inline; margin: 0 0.75rem 0 0.2rem; }
+    .lead {
+      background: var(--highlight);
+      border-left: 3px solid var(--accent);
+      padding: 0.85rem 1rem;
+      margin: 1.25rem 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.95rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.45rem 0.65rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    tr:nth-child(even) td { background: color-mix(in srgb, var(--code-bg) 40%, transparent); }
+    code, pre {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.84rem;
+    }
+    code { background: var(--code-bg); padding: 0.12rem 0.32rem; border-radius: 3px; }
+    pre {
+      background: var(--code-bg);
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .tag {
+      display: inline-block;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      margin-right: 0.35rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+    }
+    details { margin: 1rem 0; }
+    summary { cursor: pointer; font-weight: 600; }
+    .svg-wrap { overflow-x: auto; margin: 1.25rem 0; }
+    svg text { font-family: system-ui, sans-serif; }
+    .iface { color: var(--accent); font-weight: 600; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    footer { color: var(--muted); font-size: 0.78rem; margin-top: 2.5rem; }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      nav {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav aria-label="目录">
+      <strong>Managed Agents</strong>
+      <hr />
+      <a href="#s0">概览</a>
+      <a href="#s1">§1 为何 meta-harness</a>
+      <a href="#s2">§2 Pet 单容器问题</a>
+      <a href="#s3">§3 三大抽象</a>
+      <a href="#s4">§4 安全边界</a>
+      <a href="#s5">§5 Session ≠ Context</a>
+      <a href="#s6">§6 Many brains / hands</a>
+      <a href="#s7">§7 对照与启发</a>
+      <a href="#appendix">附录</a>
+      <hr />
+      <a href="./2026-04-08-managed-agents.md">Markdown 版</a>
+    </nav>
+    <main>
+      <h1>Scaling Managed Agents：把大脑与双手解耦</h1>
+      <dl class="meta">
+        <dt>来源</dt><dd><a href="https://www.anthropic.com/engineering/managed-agents">Anthropic Engineering Blog</a></dd>
+        <dt>作者</dt><dd>Lance Martin, Gabe Cemaj, Michael Cohen</dd>
+        <dt>发布</dt><dd>2026-04-08</dd>
+        <dt>阅读</dt><dd>2026-07-14</dd>
+        <dt>读者</dt><dd>Agent 平台 / 基础设施工程师</dd>
+      </dl>
+
+      <p class="lead"><strong>一句话：</strong>Managed Agents 用 Session、Harness、Sandbox 三类稳定接口虚拟化 Agent——harness 可随模型换，执行环境 cattle 化，session 日志是 context window 外的 durable 真相源。</p>
+
+      <section id="s0">
+        <h2>概览</h2>
+        <p><span class="tag">Claude Platform</span><span class="tag">Meta-harness</span><span class="tag">Long-horizon</span></p>
+        <p>Claude Platform 上的<strong>托管长时程 Agent 服务</strong>。设计灵感来自操作系统：像 <code>read()</code> 不关心底层是 1970 年代磁盘还是 SSD 一样，Managed Agents 对 harness 实现、sandbox 形态保持接口稳定。</p>
+        <table>
+          <thead><tr><th>组件</th><th>角色</th><th>关键接口</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Session</strong></td><td>Append-only 事件日志</td><td><code>getEvents()</code></td></tr>
+            <tr><td><strong>Harness</strong>（Brain）</td><td>调用 Claude、路由 tool、context 工程</td><td><code>wake</code>, <code>getSession</code>, <code>emitEvent</code></td></tr>
+            <tr><td><strong>Sandbox</strong>（Hands）</td><td>跑代码、改文件、外部执行</td><td><code>execute(name, input)</code>, <code>provision</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="s1">
+        <h2>§1 Harness 假设会过期 → 需要 meta-harness</h2>
+        <p>Harness 常编码「模型做不到什么」的补偿逻辑。模型升级后，这些逻辑可能变成<strong>死重</strong>。</p>
+        <div class="card">
+          <strong>案例：context anxiety</strong>
+          <ul>
+            <li>Claude Sonnet 4.5 接近 context 上限时会<strong>过早收尾</strong>任务。</li>
+            <li>团队在 harness 加了 <strong>context reset</strong>。</li>
+            <li>换到 Opus 4.5：行为消失，reset 逻辑无用。</li>
+          </ul>
+        </div>
+        <p>结论：不赌某一种 harness 长久有效，而是做 <strong>meta-harness</strong>——对 harness 本身做可替换抽象，让 Claude Code 或领域专用 harness 都能挂载。</p>
+      </section>
+
+      <section id="s2">
+        <h2>§2 单容器耦合 = Pet（宠物）</h2>
+        <p>早期 session、harness、sandbox 同处一容器：文件编辑是直接 syscall，边界简单。但带来三类问题：</p>
+        <ol>
+          <li><strong>Pet 问题</strong>：容器挂 → session 丢；卡死需人工护理；WebSocket 流无法区分 harness bug、丢包、容器离线。</li>
+          <li><strong>调试困境</strong>：只能 shell 进含用户数据的容器 → 实质上无法安全调试。</li>
+          <li><strong>网络假设</strong>：资源必须在 harness 旁边；客户 VPC 只能对等网络或把 harness 搬到客户侧。</li>
+        </ol>
+        <div class="svg-wrap">
+          <svg viewBox="0 0 720 200" width="100%" role="img" aria-label="耦合 vs 解耦架构">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+              </marker>
+            </defs>
+            <text x="180" y="22" text-anchor="middle" font-weight="600" fill="currentColor">耦合（Pet）</text>
+            <rect x="60" y="40" width="240" height="130" rx="8" fill="none" stroke="#c45a11" stroke-width="2" stroke-dasharray="6 4"/>
+            <text x="180" y="58" text-anchor="middle" font-size="11" fill="#888">单容器</text>
+            <rect x="80" y="70" width="60" height="36" rx="4" fill="#fef3e2" stroke="#c45a11"/>
+            <text x="110" y="92" text-anchor="middle" font-size="10">Session</text>
+            <rect x="150" y="70" width="60" height="36" rx="4" fill="#fef3e2" stroke="#c45a11"/>
+            <text x="180" y="92" text-anchor="middle" font-size="10">Harness</text>
+            <rect x="220" y="70" width="60" height="36" rx="4" fill="#fef3e2" stroke="#c45a11"/>
+            <text x="250" y="92" text-anchor="middle" font-size="10">Sandbox</text>
+            <text x="180" y="130" text-anchor="middle" font-size="10" fill="#c45a11">挂 = 全丢</text>
+
+            <text x="540" y="22" text-anchor="middle" font-weight="600" fill="currentColor">解耦（Cattle）</text>
+            <rect x="400" y="55" width="90" height="40" rx="4" fill="#e8f4fc" stroke="#2563eb"/>
+            <text x="445" y="80" text-anchor="middle" font-size="10">Session log</text>
+            <rect x="400" y="115" width="90" height="40" rx="4" fill="#fef3e2" stroke="#c45a11"/>
+            <text x="445" y="140" text-anchor="middle" font-size="10">Harness</text>
+            <rect x="530" y="85" width="70" height="36" rx="4" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="565" y="107" text-anchor="middle" font-size="10">Hand A</text>
+            <rect x="620" y="85" width="70" height="36" rx="4" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="655" y="107" text-anchor="middle" font-size="10">Hand B</text>
+            <line x1="490" y1="135" x2="530" y2="103" stroke="#888" marker-end="url(#arr)"/>
+            <line x1="490" y1="135" x2="620" y2="103" stroke="#888" marker-end="url(#arr)"/>
+            <line x1="445" y1="95" x2="445" y2="115" stroke="#888" marker-end="url(#arr)"/>
+          </svg>
+        </div>
+      </section>
+
+      <section id="s3">
+        <h2>§3 解耦 brain / hands / session</h2>
+        <h3>Hands（Sandbox &amp; Tools）</h3>
+        <pre>execute(name, input) → string
+provision({resources})  // 容器死亡后重建</pre>
+        <p>Harness 像调任意 tool 一样调容器。失败 → tool error → Claude 可 retry → 新 <code>provision</code>。</p>
+
+        <h3>Harness（Brain）</h3>
+        <pre>wake(sessionId)
+getSession(id)          // 读事件日志，续跑
+emitEvent(id, event)    // 循环中持久化</pre>
+        <p>Harness 本身也是 cattle：crash 后新实例 <code>wake</code>，从 session 恢复，无需进程内状态。</p>
+
+        <h3>Session</h3>
+        <pre>getEvents()  // 按位置切片 interrogating 事件流</pre>
+        <p>支持断点续读、rewind、重读某动作前上下文。</p>
+
+        <div class="svg-wrap">
+          <svg viewBox="0 0 720 280" width="100%" role="img" aria-label="数据流">
+            <defs>
+              <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+              </marker>
+            </defs>
+            <rect x="250" y="20" width="220" height="70" rx="8" fill="#fef3e2" stroke="#c45a11" stroke-width="2"/>
+            <text x="360" y="48" text-anchor="middle" font-weight="600" font-size="13">Brain: Claude + Harness</text>
+            <text x="360" y="68" text-anchor="middle" font-size="10" fill="#666">Agent loop · context 变换</text>
+
+            <rect x="250" y="120" width="220" height="50" rx="6" fill="#e8f4fc" stroke="#2563eb"/>
+            <text x="360" y="150" text-anchor="middle" font-size="12">Session: append-only log</text>
+
+            <rect x="80" y="210" width="130" height="44" rx="6" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="145" y="237" text-anchor="middle" font-size="11">Sandbox</text>
+            <rect x="295" y="210" width="130" height="44" rx="6" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="360" y="237" text-anchor="middle" font-size="11">MCP / tools</text>
+            <rect x="510" y="210" width="130" height="44" rx="6" fill="#e8fce8" stroke="#16a34a"/>
+            <text x="575" y="237" text-anchor="middle" font-size="11">其他 Hand</text>
+
+            <line x1="360" y1="90" x2="360" y2="120" stroke="#888" marker-end="url(#arr2)"/>
+            <text x="380" y="108" font-size="9" fill="#666">emitEvent</text>
+            <line x1="360" y1="170" x2="360" y2="90" stroke="#888" marker-end="url(#arr2)"/>
+            <text x="380" y="185" font-size="9" fill="#666">getEvents</text>
+            <line x1="300" y1="90" x2="145" y2="210" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="360" y1="90" x2="360" y2="210" stroke="#888" marker-end="url(#arr2)"/>
+            <line x1="420" y1="90" x2="575" y2="210" stroke="#888" marker-end="url(#arr2)"/>
+            <text x="200" y="175" font-size="9" fill="#666">execute()</text>
+          </svg>
+        </div>
+      </section>
+
+      <section id="s4">
+        <h2>§4 安全边界：凭证进不了 sandbox</h2>
+        <p><strong>耦合风险</strong>：Claude 生成代码与平台 token 同容器 → prompt injection 读环境即可 spawn 无限制 session。缩小 token scope 仍是「假设 Claude 做不到 X」，会随模型变强失效。</p>
+        <p><strong>结构修复</strong>：sandbox 内<strong>永远接触不到</strong>平台凭证。</p>
+        <table>
+          <thead><tr><th>场景</th><th>模式</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Git</strong></td>
+              <td>Init 时用 repo token clone，写入 local remote；sandbox 内 push/pull 可用，Agent 不持 token</td>
+            </tr>
+            <tr>
+              <td><strong>MCP / OAuth</strong></td>
+              <td>Token 存 vault；专用 proxy 按 session 取凭证代调；harness 不知凭证</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>与 <a href="./2026-06-23-claude-tag.md">Claude Tag</a> 的 Agent Proxy + credential store 同族范式。</p>
+      </section>
+
+      <section id="s5">
+        <h2>§5 Session ≠ Claude 的 Context Window</h2>
+        <p>长时程任务超出 context。Compaction、memory tool、trimming 都涉及<strong>不可逆</strong>的保留/丢弃——未来 turn 可能需要已删 token。</p>
+        <div class="card">
+          <strong>职责分离</strong>
+          <ul>
+            <li><strong>Session</strong>：durable + interrogable 全量事件；只追加，不替 harness 做 compact 决策。</li>
+            <li><strong>Harness</strong>：<code>getEvents()</code> 切片后<strong>任意变换</strong>再注入 Claude（含 prompt cache 布局、compact、trim）。</li>
+          </ul>
+        </div>
+        <p>Session 是 context window <strong>之外</strong>的 context object——类似 REPL 里 LLM 写代码 filter 外部对象，但存储在平台而非 sandbox 内。</p>
+      </section>
+
+      <section id="s6">
+        <h2>§6 Many brains, many hands</h2>
+        <h3>Many brains → TTFT</h3>
+        <p>Brain 在容器内时：每个 session 先付整容器成本（clone repo、拉事件），即使用户暂不需要 sandbox。<strong>TTFT</strong>（time-to-first-token）差。</p>
+        <p>解耦后：orchestration 读 pending events 即可开 inference；sandbox 懒 <code>provision</code>。</p>
+        <table>
+          <thead><tr><th>指标</th><th>变化（作者声称）</th></tr></thead>
+          <tbody>
+            <tr><td>p50 TTFT</td><td>约 <strong>−60%</strong></td></tr>
+            <tr><td>p95 TTFT</td><td><strong>&gt; −90%</strong></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Many hands → 统一 execute</h3>
+        <p>每个 hand：<code>execute(name, input) → string</code>。Harness 不知背后是容器、手机还是模拟器。Brain 之间可传递 hand。早期单容器是因为旧模型只能单 shell；模型变强后多环境路由成为能力而非负担。</p>
+      </section>
+
+      <section id="s7">
+        <h2>§7 对照与工程启发</h2>
+        <table>
+          <thead><tr><th>主题</th><th>Managed Agents</th><th>仓库内对照</th></tr></thead>
+          <tbody>
+            <tr><td>Harness 演进</td><td>Meta-harness，接口稳定</td><td><a href="./2026-02-11-harness-engineering.md">OpenAI Harness Engineering</a></td></tr>
+            <tr><td>凭证隔离</td><td>Vault + proxy</td><td><a href="./2026-06-23-claude-tag.md">Claude Tag Agent Proxy</a></td></tr>
+            <tr><td>Compact / session</td><td>Log 全量，harness 读路径变换</td><td><code>frontier-apps/codex-note.md</code></td></tr>
+            <tr><td>具体 harness</td><td>可挂 Claude Code 等</td><td>Claude Code CLI（本地实现）</td></tr>
+          </tbody>
+        </table>
+
+        <h3>可行动清单</h3>
+        <ol>
+          <li>画出 brain / hands / session 边界；状态是否绑单 worker？</li>
+          <li>统一 sandbox、MCP、远程 runner 为同一 <code>execute</code> 语义。</li>
+          <li>凭证注入下沉 proxy；sandbox 环境变量零 secret。</li>
+          <li>Log 只追加；compact 是 harness 的<strong>读模型</strong>。</li>
+          <li>模型升级后审计 harness 补偿逻辑（ablation）。</li>
+          <li>分别度量 TTFT 与首次 sandbox 就绪时间。</li>
+        </ol>
+      </section>
+
+      <section id="appendix">
+        <h2>附录</h2>
+        <details open>
+          <summary>接口速查</summary>
+          <table>
+            <thead><tr><th>接口</th><th>所属</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td><code>execute(name, input) → string</code></td><td>Hand</td><td>统一执行面</td></tr>
+              <tr><td><code>provision({resources})</code></td><td>Hand</td><td>重建 sandbox</td></tr>
+              <tr><td><code>wake(sessionId)</code></td><td>Harness</td><td>拉起新 harness</td></tr>
+              <tr><td><code>getSession(id)</code></td><td>Harness</td><td>读 session 续跑</td></tr>
+              <tr><td><code>emitEvent(id, event)</code></td><td>Harness</td><td>持久化循环事件</td></tr>
+              <tr><td><code>getEvents()</code></td><td>Session</td><td>切片 interrogating 日志</td></tr>
+            </tbody>
+          </table>
+        </details>
+        <details>
+          <summary>仍待验证</summary>
+          <ul>
+            <li>公开 API / 配额细节</li>
+            <li><code>getEvents()</code> retention 与顺序保证</li>
+            <li>多 harness 并发 <code>wake</code> 同一 session 的语义</li>
+            <li>TTFT 基准与负载</li>
+            <li>Brain 间传递 hand 的权限模型</li>
+          </ul>
+        </details>
+        <details>
+          <summary>概念表</summary>
+          <table>
+            <thead><tr><th>术语</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>Meta-harness</td><td>容纳未来 harness 的接口层，非具体 prompt loop</td></tr>
+              <tr><td>Brain / Hands</td><td>推理编排 vs 执行（sandbox、tools）</td></tr>
+              <tr><td>Pet vs Cattle</td><td>不可替代长命实例 vs 可丢弃重建</td></tr>
+              <tr><td>Context anxiety</td><td>感知 context 将满时过早结束任务</td></tr>
+              <tr><td>TTFT</td><td>接受任务 → 首个输出 token 的延迟</td></tr>
+            </tbody>
+          </table>
+        </details>
+      </section>
+
+      <footer>
+        生成时间：2026-07-14 · Learning 仓库 ·
+        <a href="https://www.anthropic.com/engineering/managed-agents">原文</a>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
