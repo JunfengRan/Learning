@@ -67,6 +67,8 @@
 - [ ] 明暗色 `prefers-color-scheme`
 - [ ] sticky nav 锚点可跳转
 - [ ] 附录 `<details>` 折叠（若较长）
+- [ ] 每个 `<svg>` 有 `viewBox`、`xmlns`、`aria-label`；marker id 不重复
+- [ ] `npm run validate:html-svg` 通过（新笔记默认扫 `frontier-apps/`）
 - [ ] 浏览器打开目测通过
 
 ### 证据

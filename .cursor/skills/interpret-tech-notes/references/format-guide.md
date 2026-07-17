@@ -68,7 +68,7 @@ frontier-apps/
 | 流程/序列图 | Mermaid（遵守 `draw-mermaid-diagrams`） | 内嵌 SVG（优先）或 Mermaid.js（自包含脚本） |
 | 对照表 | Markdown table | `<table>` + 列宽/斑马纹 |
 | 代码索引 | 表格 + 反引号路径 | `<code>` + 可点击锚点 |
-| 验证 | `npm run validate:mermaid` | 浏览器打开目测；无 CI 强制 |
+| 验证 | `npm run validate:mermaid` | `npm run validate:html-svg`（见 [html-svg-guide.md](./html-svg-guide.md)） |
 
 ## 何时不用 HTML
 

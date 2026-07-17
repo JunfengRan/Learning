@@ -50,18 +50,53 @@
 
 - 运行时：**Bun**；默认分支：**`dev`**
 
+### 1.1 核心框架
+
+```mermaid
+flowchart TB
+  subgraph UI["用户界面层"]
+    TUI["packages/opencode (CLI/TUI)"]
+    APP["packages/app (Web UI)"]
+    DESK["packages/desktop (Electron)"]
+  end
+
+  subgraph API["服务与协议层"]
+    SRV["packages/opencode/src/server"]
+    PROTO["packages/protocol (HttpApi 定义)"]
+    CLIENT["packages/client (生成的 SDK)"]
+  end
+
+  subgraph CORE["核心业务层"]
+    COREPKG["packages/core (Session/DB/Tools)"]
+    SCHEMA["packages/schema (类型与事件)"]
+    LLM["packages/llm (模型提供商)"]
+  end
+
+  TUI --> SRV
+  APP --> CLIENT
+  DESK --> APP
+  CLIENT --> PROTO
+  SRV --> COREPKG
+  COREPKG --> SCHEMA
+  COREPKG --> LLM
+```
+
+**读图要点**：TUI 直连 Server；Web/Desktop 经生成 SDK 走 `protocol` 契约；Server 下沉到 `core`（V2 引擎 + Session DB），`schema` 与 `llm` 为横切依赖。
+
+### 1.2 包依赖（V1 / V2 双轨）
+
 ```mermaid
 flowchart LR
   Schema["packages/schema"]
-  Core["packages/core\nV2 引擎"]
-  OpenCode["packages/opencode\nV1 产品层"]
-  LLM["packages/llm"]
+  Core["packages/core (V2 引擎)"]
+  OpenCode["packages/opencode (V1 产品层)"]
+  LLMPkg["packages/llm"]
 
   Schema --> Core
   Schema --> OpenCode
   Core --> OpenCode
-  LLM --> Core
-  LLM --> OpenCode
+  LLMPkg --> Core
+  LLMPkg --> OpenCode
 ```
 
 | 包 | 职责 |
@@ -83,7 +118,16 @@ flowchart LR
 
 ## 2. 范式升级：ReAct → OpenCode
 
-**V1/V2 共用理念**；V2 把 V1 隐式行为显式化（admit、drain、Context Epoch）。
+**V1/V2 共用理念**；V2 把 V1 隐式行为显式化（admit、drain、Context Epoch）。相对经典 ReAct，OpenCode 的三层跃迁如下：
+
+1. **从「内存里的循环」到「可持久化的 Session 系统」**（最核心）  
+   ReAct 循环活在进程内存里——崩溃、断网、关终端即丢状态；无法可靠重试、多端同步或审计「当时发生了什么」。OpenCode 把 user/asst/tool 写入 Session DB，V2 再把待处理输入放进 `session_input` inbox，使执行可恢复、可投影、可回放。
+
+2. **从「拼 prompt」到「可版本化的系统上下文」**  
+   每轮临时拼接 system/tools 难以稳定 cache，也难追踪「哪次变更导致行为漂移」。V1 每轮重拼 system；V2 **Context Epoch** 把 baseline 固定在 `system[]`，小变更走 `context.updated` 增量——兼顾动态上下文与 Prompt Cache 前缀稳定。
+
+3. **从「能调工具」到「受治理的执行」**  
+   裸 ReAct 工具调用缺少审批与策略边界。OpenCode 在 Permission（allow/ask/deny）、MCP 连接治理、Compaction 溢出恢复等层把「能调」变成「可调且可审计」。
 
 | 维度 | ReAct | OpenCode V1 | OpenCode V2 |
 |------|-------|-------------|-------------|
@@ -127,14 +171,16 @@ V1 Runtime 选择：`experimentalNativeLlm=true` 时走 `@opencode-ai/llm` Nativ
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Created: Session.create
-  Created --> Admitted: SessionV2.prompt(admit)
-  Admitted --> Promoted: promote 安全边界
-  Promoted --> Running: SessionExecution.wake
-  Running --> Running: tool loop
-  Running --> Idle: drain 排空 inbox
-  Running --> Interrupted: interrupt
-  Idle --> Running: 新 wake
+  [*] --> Created: "sessions.create()"
+  Created --> Admitted: "sessions.prompt() 写入 inbox"
+  Admitted --> Promoted: "Runner 在安全边界 promote"
+  Promoted --> Running: "SessionRunner drain"
+  Running --> Running: "provider turn + 工具结算"
+  Running --> Idle: "无 pending 工作"
+  Idle --> Admitted: "新 prompt"
+  Running --> Interrupted: "sessions.interrupt()"
+  Interrupted --> Admitted: "inbox 保留，可 wake 恢复"
+  Idle --> [*]: "归档/删除（未来）"
 ```
 
 **Drain** = 排空 `session_input` inbox 中待处理工作（promote → context → `llm.stream` → 工具结算 → 下一 turn）。V1 等价物是 **loop 跑完直到 assistant 完成且无 pending tool**。
@@ -519,4 +565,4 @@ flowchart TB
 
 ---
 
-*生成时间：2026-07-11 · 精简重组版（+OpenClaw/Codex/Hermes 对比）*
+*生成时间：2026-07-17 · 精简重组版（+OpenClaw/Codex/Hermes 对比）*

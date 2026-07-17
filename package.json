@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "validate:mermaid": "node scripts/validate-mermaid.mjs"
+    "validate:mermaid": "node scripts/validate-mermaid.mjs",
+    "validate:html-svg": "node scripts/validate-html-svg.mjs"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^11.6.0"

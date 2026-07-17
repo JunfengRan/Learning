@@ -128,7 +128,8 @@ description: >-
 | 格式 | 验证 |
 |------|------|
 | Markdown + Mermaid | `npm run validate:mermaid` |
-| HTML | 浏览器打开目测布局、锚点、SVG；关键路径 Grep/Read |
+| HTML + 内嵌 SVG | `npm run validate:html-svg`（默认扫 `frontier-apps/`；全仓加 `--all`） |
+| HTML | 浏览器打开目测布局、锚点；关键路径 Grep/Read |
 | 应用技术 | [references/depth-checklist.md](references/depth-checklist.md) |
 
 ## 三种类型的深度差异（必守）
@@ -158,7 +159,7 @@ description: >-
 ## 与仓库其他 skill 协作
 
 - Markdown 画图 → `draw-mermaid-diagrams`
-- HTML 画图 → 内嵌 SVG（默认）；Mermaid 仅当 SVG 过重
+- HTML 画图 → 内嵌 SVG（默认）；布局规范见 [references/html-svg-guide.md](references/html-svg-guide.md)；写完跑 `npm run validate:html-svg`
 - 应用技术横向对比 → 先 Read 已有 `*-note.md` / `*.html`
 
 ## 示例触发

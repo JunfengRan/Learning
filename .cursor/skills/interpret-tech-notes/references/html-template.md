@@ -141,8 +141,9 @@
 
 ### 图表
 
-- **优先内嵌 SVG**：架构/序列/数据流；不依赖 Mermaid CI
+- **优先内嵌 SVG**：架构/序列/数据流；布局规范见 [html-svg-guide.md](html-svg-guide.md)
 - SVG 节点标签用真实模块名；`viewBox` 固定，宽度 100% 自适应
+- 树形/分层图用 T 型分叉，禁止单点 fan-out 挤在一行
 - 若必须用 Mermaid：在 HTML 底部加本地 `mermaid` 脚本 + `mermaid.run()`（仍须目测，不走仓库 CI）
 
 ### 表格
