@@ -406,50 +406,231 @@ V1 每轮 `Today's date` 易 daily miss；V2 Context Epoch 把小变更转为 `c
 | 能力 | V1 | V2 |
 |------|----|----|
 | 跨 Session 记忆 | **无** | **无** |
-| Compaction | 完整（prune、tail） | 精简编排 |
+| **Prune**（软清 tool output） | **有**（`compaction.prune`） | 配置项存在，**Core Runner 未接线** |
+| **Full Compaction**（摘要替换） | head/tail + compaction agent | `select` + 共享 `buildPrompt` |
+| 历史投影 | `filterCompacted`（内存重排） | `SessionHistory`（DB seq 截断） |
 | Context Epoch | 无 | **有**（baseline + 增量） |
 | 共享 | — | `buildPrompt` 摘要模板 |
 
-### 8.2 V1 Compaction
+**核心区分**：OpenCode 的「压缩」分 **两层**，不要混为一谈：
+
+| 层级 | 机制 | 改 DB 吗 | 改发给模型的上下文吗 |
+|------|------|---------|---------------------|
+| **轻量 Prune**（V1） | 给旧 ToolPart 打 `time.compacted` 标记 | 只写标记，**output 原文仍在 DB** | ✅ 投影时替换为占位符 |
+| **Full Compaction**（V1/V2） | compaction agent 写摘要，丢弃/截断旧对话 | ✅ 写入 compaction 消息 | ✅ 只加载摘要 + recent tail |
+
+### 8.2 V1：三层压缩管线
+
+V1 实际有 **三条独立路径**，触发时机与作用域不同：
 
 ```mermaid
-flowchart TD
-  A["isOverflow / 手动"] --> B["select: head + tail_turns"]
-  B --> C["compaction agent 摘要"]
-  C --> D["filterCompacted 重排"]
-  D --> E["processor 继续 loop"]
+flowchart TB
+  subgraph dbLayer["A. Session DB（完整历史，只增）"]
+    DB["user / asst / tool parts\n含 tool.state.output 原文"]
+  end
+
+  subgraph prunePath["B. Prune（每 turn 后可选，轻量）"]
+    P1["倒序扫描，跳过最近 2 个 user turn"]
+    P2["累计旧 tool output token"]
+    P3["超 PRUNE_PROTECT 且总量 > PRUNE_MINIMUM"]
+    P4["写 part.state.time.compacted"]
+    P5["toModelMessages:\noutput → 占位符"]
+    P1 --> P2 --> P3 --> P4 --> P5
+  end
+
+  subgraph compactPath["C. Full Compaction（溢出/手动）"]
+    C1["isOverflow 或 compaction part"]
+    C2["select: head + tail_turns"]
+    C3["compaction agent + buildPrompt"]
+    C4["写入 summary assistant"]
+    C5["filterCompacted 投影"]
+    C1 --> C2 --> C3 --> C4 --> C5
+  end
+
+  DB --> prunePath
+  DB --> compactPath
+  P5 --> API["本轮 API messages[]"]
+  C5 --> API
 ```
 
-文件：`opencode/.../session/compaction.ts`；触发：`processor.ts` token ≥ `usable()`；Prune 可选软删旧 tool output。
+文件：`packages/opencode/src/session/compaction.ts`、`message-v2.ts`（`filterCompacted` / `toModelMessages`）；触发：`processor.ts` 统计 token → `isOverflow()`；`prompt.ts` loop 调度。
 
-### 8.3 V2 Compaction + Context Epoch
+#### 8.2.1 Prune：只清「发给模型的 tool output」
 
-- 触发前 `compactIfNeeded()` 估算；溢出后 `compactAfterOverflow()`
-- 摘要同 `buildPrompt`；投影为 `type: compaction` 消息
+> **直接回答**：Prune **不是**在 compaction 摘要后再删 output，也 **不是**只保留压缩后的上下文。  
+> 它 **保留 Session DB 里的完整原始历史**（含 tool `state.output` 全文），仅在 **构建 LLM 请求** 时，把被标记的旧 tool result **投影成占位符**。
 
-**Context Epoch（V2 独有）**：
-
-| 层 | 位置 | 何时变 |
-|----|------|--------|
-| baseline | `request.system[]` | 初始化、compaction 后 replace |
-| 增量 | `messages[]`（`context.updated`） | Skill/日期等 Context Source reconcile |
+| 项 | 行为 |
+|----|------|
+| 开关 | `compaction.prune: true`（默认关） |
+| 时机 | 每轮 provider turn 成功后，`prompt.ts` **异步 fork** 调用 `prune()` |
+| 扫描方向 | 从最新消息 **倒序**；跳过最近 **2 个 user turn** |
+| 停止边界 | 遇到 `assistant.summary`（上次 compaction 摘要）或已有 `time.compacted` 的 tool |
+| 保护 | 最近 40k token 内的 tool output 不删（`PRUNE_PROTECT`）；`skill` 工具永不 prune |
+| 生效阈值 | 待清 output 累计 **> 20k token**（`PRUNE_MINIMUM`）才真正写标记 |
+| DB 写入 | 仅 `part.state.time.compacted = Date.now()`，**不删 `state.output`** |
+| 发给模型 | `toModelMessages` 见 `compacted` → `"[Old tool result content cleared]"`，附件一并清空 |
 
 ```mermaid
 sequenceDiagram
-  participant Runner
-  participant Epoch as ContextEpoch
-  participant LLM
+  participant Loop as SessionPrompt.loop
+  participant DB as Session DB
+  participant Prune as compaction.prune
+  participant Proj as toModelMessages
 
-  Runner->>Epoch: prepare(reconcile)
-  alt Source 变更
-    Epoch->>LLM: context.updated 进 messages
-  end
-  Runner->>LLM: system=[agent,baseline] + messages
+  Loop->>DB: tool 执行完毕，output 全文落库
+  Loop->>Prune: fork 异步 prune
+  Prune->>DB: 旧 tool part 写 time.compacted
+  Note over DB: state.output 原文仍在
+  Loop->>Proj: 下一轮 filterCompacted + toModelMessages
+  Proj->>Proj: compacted ? 占位符 : truncate 2000 字符
 ```
 
-OpenAI lowering：增量包为 `<system-update>…</system-update>`；Anthropic Opus 4.8+ 可用原生 system 块。
+**与 Full Compaction 的关系**：Prune 可 **单独** 缓解 context 压力，**不** 产生摘要消息；Full Compaction 走 head/tail 分割 + compaction agent，两者可叠加——先 prune 减小 head 体积，再触发 overflow compaction。
 
-配置示例：`compaction.auto`、`tail_turns: 2`、`preserve_recent_tokens: 8000`
+#### 8.2.2 Full Compaction：head 摘要 + tail 保留
+
+**触发条件**（任一）：
+
+1. **自动**：上一轮 assistant 完成且 `tokens.total ≥ usable()`（context 减 reserved buffer，默认 20k）
+2. **手动**：user 消息带 `compaction` part（`/compact` 等）
+3. **溢出恢复**：processor 返回 `"compact"`（如 media 过大），带 `overflow: true`
+
+**select（head / tail 切分）**：
+
+```mermaid
+flowchart LR
+  H["head\n待摘要的旧对话"] --> Agent["compaction agent"]
+  T["tail\n最近 N turn 原文保留"] --> FC["filterCompacted"]
+  Agent --> Sum["summary assistant"]
+  Sum --> FC
+  FC --> Out["模型可见历史"]
+```
+
+| 参数 | 默认 | 含义 |
+|------|------|------|
+| `tail_turns` | 2 | 至少保留最近 N 个 **user turn** |
+| `preserve_recent_tokens` | min(8000, usable×25%) | tail 区 token 预算；超预算则在 turn 内 **二分** 找切点 |
+| `toolOutputMaxChars` | 2000 | 仅 **摘要输入** 时截断 tool output（与 prune 无关） |
+
+**process 流程**：
+
+1. `select()` → `{ head, tail_start_id }`
+2. 用 `buildPrompt({ previousSummary, context })` 让 compaction agent 读 head（插件可 hook `experimental.session.compacting`）
+3. 写入 `mode: "compaction"` 的 summary assistant 消息
+4. 更新 compaction part 的 `tail_start_id`
+5. 可选 `autocontinue`：插入 synthetic user「Continue if you have next steps…」
+
+**filterCompacted（投影，非删库）**：
+
+DB 仍保留 compaction 之前的全部消息；每轮 loop 用 `filterCompacted(stream)` **重排** 成模型可见序列：
+
+```text
+[compaction-user + compaction-part]
+→ [summary-assistant]
+→ [tail_start_id … compaction 之前的 retained tail]
+→ [compaction 之后的新消息]
+```
+
+即：** chronological 顺序被打乱**，但语义是「摘要 + 保留尾部 + 后续增量」。UI/审计仍可读 DB 全量；模型只吃投影结果。
+
+#### 8.2.3 V1 配置速查
+
+```json
+{
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "tail_turns": 2,
+    "preserve_recent_tokens": 8000,
+    "reserved": 20000
+  }
+}
+```
+
+### 8.3 V2：请求前估算 + DB 级截断
+
+V2 **不** 走 V1 的 `filterCompacted` / `prune` 路径；压缩逻辑在 `packages/core/src/session/compaction.ts`，由 `SessionRunner` 编排。
+
+```mermaid
+flowchart TD
+  Start["runTurnAttempt"] --> Epoch["ContextEpoch.prepare"]
+  Epoch --> Load["SessionHistory.entriesForRunner\nbaselineSeq + latestCompaction"]
+  Load --> Build["组装 LLM.request"]
+  Build --> Pre{"compactIfNeeded?\n估算 > context - buffer"}
+  Pre -->|是| Compact["compactAfterOverflow\nLLM 写 summary"]
+  Compact --> Die1["die ContinueAfterCompaction\n重建 request"]
+  Pre -->|否| Stream["llm.stream"]
+  Stream --> Over{"provider overflow\n且 assistant 未开始?"}
+  Over -->|是| Recover["compactAfterOverflow"]
+  Recover --> Die2["die ContinueAfterOverflowCompaction\n无 overflow 恢复再试一次"]
+  Over -->|否| Done["正常 turn 结束"]
+  Die1 --> Start
+  Die2 --> Start
+```
+
+| 阶段 | 函数 | 说明 |
+|------|------|------|
+| **预防性** | `compactIfNeeded` | 发请求 **前** 估算 `{system, messages, tools}`；超 `context - max(output, buffer)` 则压缩 |
+| **溢出恢复** | `compactAfterOverflow` | Provider 报 context overflow 且 **尚未** 开始 assistant 流式输出时触发 |
+| **摘要** | 共享 `buildPrompt` | 与 V1 同模板（Objective / Work State / Next Move） |
+| **持久化** | `session.next.compaction.ended` | 写入 `type: compaction` 消息：`summary` + `recent` |
+| **历史加载** | `SessionHistory.messageRows` | `seq >= latestCompaction.seq`；旧消息 **不再进入 Runner** |
+| **LLM 投影** | `to-llm-message.ts` | compaction 消息 → `<conversation-checkpoint>` 包裹的 user 消息 |
+
+**V2 select 与 V1 tail 的差异**：
+
+| | V1 `select` | V2 `select` |
+|--|-------------|-------------|
+| 单位 | 按 **user turn** 切分 | 按 **序列化后的整条 message** 倒序累加 token |
+| 保留预算 | `preserve_recent_tokens` | `keep.tokens`（默认 8000） |
+| 切分粒度 | turn 内可二分 | 单条 message 可前缀/后缀切分（×4 字符启发式） |
+| recent 去向 | 留在 DB，靠 `tail_start_id` + filterCompacted | 写入 compaction 消息的 `recent` 字段 |
+
+**Context Epoch 与 Compaction 联动**：
+
+| 层 | 位置 | 何时变 |
+|----|------|--------|
+| baseline | `request.system[]` | 初始化；compaction 后 `SystemContext.replace` + 更新 `baseline_seq` |
+| 增量 | `messages[]`（`context.updated`） | Skill/日期等 reconcile，**不** 动 baseline |
+| 截断后 | `SessionHistory` | compaction seq 之前的 user/asst/tool **不再加载**（比 V1 filterCompacted 更硬） |
+
+```mermaid
+sequenceDiagram
+  participant Runner as SessionRunner
+  participant Epoch as ContextEpoch
+  participant Hist as SessionHistory
+  participant Compact as compaction
+  participant LLM
+
+  Runner->>Epoch: prepare / initialize
+  Epoch-->>Runner: baseline + baselineSeq
+  Runner->>Hist: entriesForRunner(baselineSeq)
+  Hist-->>Runner: seq >= compaction 的消息
+  Runner->>Compact: compactIfNeeded(request)
+  alt 需要压缩
+    Compact->>LLM: 仅 summary 请求
+    Compact->>Hist: 写入 compaction 消息
+    Compact->>Epoch: replace baseline
+    Runner->>Runner: ContinueAfterCompaction 重建
+  else 正常
+    Runner->>LLM: system + messages + tools
+  end
+```
+
+**V2 配置**（`packages/core/src/config/compaction.ts`）：
+
+```json
+{
+  "compaction": {
+    "auto": true,
+    "buffer": 20000,
+    "keep": { "tokens": 8000 }
+  }
+}
+```
+
+OpenAI lowering：Context 增量包为 `<system-update>…</system-update>`；Anthropic Opus 4.8+ 可用原生 system 块。
 
 ### 8.4 与 OpenClaw / Codex / Hermes 对比：上下文、压缩、记忆
 
@@ -510,7 +691,17 @@ flowchart TB
 | 改 SKILL.md 后生效？ | `InstanceStore.reload`；V2 可发 `context.updated` |
 | Agent 改文件 vs 用户改？ | InstanceState 缓存不变；`skill` 工具可临时注入 |
 
-### 9.5 schema 契约
+### 9.6 Prune 删的是什么？
+
+| 问题 | 答案 |
+|------|------|
+| 删 DB 里的 tool output 吗？ | **不删**。只写 `time.compacted` 标记 |
+| 删 compaction 摘要后的 output 吗？ | **无关**。Prune 与 Full Compaction 是两条路径 |
+| 压缩后上下文还含原文吗？ | **发给模型时不含**；占位符 `"[Old tool result content cleared]"` |
+| UI / 回放能看到原文吗？ | DB 全量仍在；是否展示取决于 UI 是否读 `compacted` 标记 |
+| V2 有 Prune 吗？ | 配置 schema 有 `prune`，Core Runner **尚未实现** |
+
+### 9.7 schema 契约
 
 `packages/schema` 无业务逻辑；变更后 `packages/client` 执行 `bun run generate`。
 
